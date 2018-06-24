@@ -1,4 +1,4 @@
-from utils import stats, heat
+from utils import stats, stats_cari, heat
 from attacks import fgsm, fgsm_it, cw
 from cifar_resnet import agu, build_network, loss_func, evaluation
 import tensorflow as tf
@@ -12,6 +12,7 @@ EPSI = 0.1
 
 CW_ITERS = 100
 BIN_STEPS = 20
+NORM = 'l2' #l0/l2/linf
 
 (train_features, train_labels), (test_features, test_labels) = cifar10.load_data()
 (test_features, test_labels) = agu(test_features, test_labels)
@@ -27,4 +28,5 @@ if len(sys.argv)<2 or sys.argv[1]=="fgsm_it":
     stats([s[1] for s in perturbed_accuracy], test_labels[:1000])
     heat([s[1] for s in perturbed_accuracy], test_labels[:1000], "cifar10_fgsm_")
 else:
-    cw(test_features[:100], test_labels[:100], CW_ITERS, BIN_STEPS, build_network, loss_func, evaluation, './tmp/original_cifar_model-8')
+    perturbed_norms, was = cw(test_features[:100], test_labels[:100], CW_ITERS, BIN_STEPS, build_network, loss_func, evaluation, NORM, './tmp/original_cifar_model-8')
+    stats_cari(perturbed_norms, was)

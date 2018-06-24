@@ -42,6 +42,25 @@ def stats(predicts, labels):
     avreage = avreage/(len(predicts[0])*9)
     print("best:", best, " worst:", worst, " avreage:", avreage)
 
+def stats_cari(norms, was):
+    best = 0.0
+    worst = 0.0
+    avreage = 0.0
+    for j in range(len(norms[0])):
+        b = 1000.0
+        w = 0.0
+        for i in range(10):
+            if i != was[j]:
+                avreage += norms[i][j]
+                b = min(b, norms[i][j])
+                w = max(w, norms[i][j])
+        best += b
+        worst += w
+    avreage /= (9*len(norms[0]))
+    best /= len(norms[0])
+    worst /= len(norms[0])
+    print("best:", best, " worst:", worst, " avreage:", avreage)
+
 def heat(predicts, labels, name=""):
     ar = np.zeros([10,10])
     was = np.zeros([10,10])
@@ -62,6 +81,27 @@ def heat(predicts, labels, name=""):
     plt.show()
     n = name + "heat.png"
     plt.savefig(n)
+
+def heat_cari(norms, was, name=""):
+    ar = [np.zeros([10, 10]), np.zeros([10, 10])]
+    for i in range(len(norms[0])):
+        for j in range(10):
+            p = was[i]
+            if p != j:
+                ar[1][p][j] += 1
+                ar[0][p][j] += norms[j][i]
+    for i in range(10):
+        for j in range(10):
+            if ar[1][j][i] != 0:
+                ar[0][j][i] = ar[0][j][i]/ar[1][j][i]
+                ar[0][j][i] *= 10
+    print(ar[0])
+    plt.imshow(ar[0], cmap='hot', interpolation='nearest')
+    plt.show()
+    n = name + "heat_cari.png"
+    plt.savefig(n)
+
+
 
 def disc(image):
     for i in range(len(image[0])):

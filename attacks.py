@@ -85,15 +85,17 @@ def fgsm(images, EPSI, build_network, loss_func, evaluation, restore_path="./tmp
 
     return perturbed_accuracy
 
-def loss_f6(logits, x_before, x_after, target, c):
-    l2 = tf.sqrt(tf.reduce_sum(tf.square(x_before - x_after)))
+def loss_f6(logits, x_before, x_after, target, c, l):
+    norm = {'l0':tf.reduce_sum(tf.cast(tf.equal(x_before, x_after) , tf.float32)),
+            'l2':tf.sqrt(tf.reduce_sum(tf.square(x_before - x_after))),
+            'linf':tf.reduce_max(tf.abs(x_before-x_after))}
     Z_t = tf.reduce_sum(target[0]*logits[0])
     temp = logits[0] - 100*target[0]
     Z_max = tf.reduce_max(temp)
     f6 = tf.maximum(Z_max-Z_t, 0.0)
-    return l2 + f6*c[0]
+    return (norm[l] + f6*c[0], norm[l])
 
-def cw(images, labels, ITERS, BIN_STEPS, build_network, loss_func, evaluation, restore_path="./tmp/original_mnist_model-8"):
+def cw(images, labels, ITERS, BIN_STEPS, build_network, loss_func, evaluation, norm='l2', restore_path="./tmp/original_mnist_model-8"):
     tf.reset_default_graph()
     imp_sh = [1]
     for i in images.shape[1:]:
@@ -110,7 +112,7 @@ def cw(images, labels, ITERS, BIN_STEPS, build_network, loss_func, evaluation, r
     with tf.variable_scope('model'):
         y_conv, logits = build_network(advx, training=tr, logits=True)
 
-    loss = loss_f6(logits, x, advx, y_, const)
+    loss,norm = loss_f6(logits, x, advx, y_, const, norm)
     opt = tf.train.GradientDescentOptimizer(1e-3).minimize(loss, var_list=[d])
     myinit = tf.variables_initializer(var_list=[d])
 
@@ -122,6 +124,8 @@ def cw(images, labels, ITERS, BIN_STEPS, build_network, loss_func, evaluation, r
         saver.restore(sess, restore_path)
 
         afterd = 0
+        perturbed_norms = [[],[],[],[],[],[],[],[],[],[]]
+        was = []
         for itr in tqdm(range(images.shape[0])):
             for i in range(10):
                 target = np.zeros(10)
@@ -132,18 +136,22 @@ def cw(images, labels, ITERS, BIN_STEPS, build_network, loss_func, evaluation, r
                     sess.run(myinit)
                     c = (end + begin) / 2
                     for _ in range(ITERS):
-                        _,l = sess.run([opt,loss], feed_dict={x: [images[itr]], y_: [target], const: [c]})
-                    perturbed = y_conv.eval(feed_dict={x: [images[itr]], y_: [target], const: [c]})
+                        _,l = sess.run([opt,norm], feed_dict={x: [images[itr]], y_: [target], const: [c]})
+                    #perturbed = y_conv.eval(feed_dict={x: [images[itr]], y_: [target], const: [c]})
+                    perturbed = y_conv.eval(feed_dict={x: disc([images[itr]]), y_: [target], const: [c]})
                     if np.argmax(perturbed) == i:
                         end = c
                     else:
                         begin = c
                 c = (begin+end)/2
                 #if itr < 10:
-                #    perturbed_im = advx.eval(feed_dict={x: [images[itr]], y_: [target], const: [c]})
-                #    make_picture(perturbed_im, images[itr], i, itr)
-                perturbed = y_conv.eval(feed_dict={x: disc([images[itr]]), y_: [target], const: [c]})
-                if np.argmax(perturbed) == i:
+                    #perturbed_im = advx.eval(feed_dict={x: [images[itr]], y_: [target], const: [c]})
+                    #make_picture(perturbed_im, images[itr], i, itr)
+                perturbed, ll = sess.run([y_conv, norm], feed_dict={x: disc([images[itr]]), y_: [target], const: [c]})
+                perturbed_disc = sess.run(y_conv, feed_dict={x: disc([images[itr]]), y_: [target], const: [c]})
+                perturbed_norms[i].append(ll)
+                was.append(np.argmax(labels[itr]))
+                if np.argmax(perturbed_disc) == i:
                     afterd+=1
                 print("target:", i, " c=", ((begin+end)/2), " dics:", (afterd/(10*itr+i+1)))
-    return
+    return perturbed_norms,was
